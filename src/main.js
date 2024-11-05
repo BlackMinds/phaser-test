@@ -16,6 +16,13 @@ const config = {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
+    physics: {
+        default: 'arcade',  // 必须启用 arcade 物理系统
+        arcade: {
+            gravity: { y: 300 },  // 设置全局重力
+            debug: false          // 关闭调试模式
+        }
+    },
     scene: [
         Boot,
         Preloader,
