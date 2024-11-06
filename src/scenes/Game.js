@@ -14,6 +14,8 @@ export class Game extends Scene {
         // 加载背景图像
         this.load.image('background', 'assets/background.png');
         this.load.image('bullets', 'assets/zidan.png');
+        this.load.image('expertise', 'assets/expertise.png');
+        
 
         // 加载角色精灵表
         this.load.spritesheet('character', 
@@ -29,10 +31,13 @@ export class Game extends Scene {
 
     create() {
         // 设置背景颜色
-        this.cameras.main.setBackgroundColor(0x00ff00);
+        // this.cameras.main.setBackgroundColor(0x00ff00);
 
-        // 添加背景图像
-        this.add.image(512, 384, 'background').setAlpha(0.5);
+        const background = this.add.image(0, 0, 'background')
+            .setOrigin(0)        // 将图片的原点设置为左上角
+            .setAlpha(0.5);      // 设置透明度
+
+        background.setDisplaySize(this.scale.width, this.scale.height); 
 
         // 创建玩家角色并设置物理属性
         this.player = this.physics.add.sprite(512, 384, 'character');
@@ -45,8 +50,8 @@ export class Game extends Scene {
         this.physics.world.gravity.y = 0; // 移除垂直重力，允许玩家在四个方向上自由移动
 
         // 设置玩家的物理属性
-        this.player.setBounce(0.2);
-        this.player.setCollideWorldBounds(true);
+        // this.player.setBounce(0.2);
+        // this.player.setCollideWorldBounds(true);
 
         this.healthBar = new HealthBar(this, this.player.getBounds().x, this.player.getBounds().y, 50, 5);
 
@@ -120,22 +125,67 @@ export class Game extends Scene {
             defaultKey: 'bullets',
             maxSize: 110 // 设置最大子弹数
         });
-
+        
         this.physics.add.collider(this.bullets, this.geeks, (bullet, monster) => {
             if (bullet.active && monster.active) {
-                // 击中怪物后禁用子弹，确保只击中一个怪物
                 bullet.disableBody(true, true);
-                monster.healthBar.decrease(9); // 假设子弹命中怪物时减少20点血量
-    
-                // 如果怪物的生命值降至0，销毁怪物
+                monster.healthBar.decrease(100);
+        
                 if (monster.healthBar.currentHealth <= 0) {
-                    monster.disableBody(true, true); // 隐藏并禁用怪物
-                    monster.healthBar.healthBar.destroy(); // 移除怪物的血条
+                    // 生成经验球
+                    const experienceOrb = this.physics.add.sprite(monster.x, monster.y, 'expertise');
+                    experienceOrb.setScale(0.5); // 缩小经验球
+                    this.experienceOrbs.add(experienceOrb);
+        
+                    // 销毁怪物
+                    monster.disableBody(true, true);
+                    monster.healthBar.healthBar.destroy();
                 }
             }
         });
+        
+
+        
+        // 初始化等级和经验值
+        this.level = 1;
+        this.experience = 0;
+        this.experienceNeeded = 100; // 初始所需经验
+
+        // 创建等级显示文本
+        this.levelText = this.add.text(10, 10, `等级: ${this.level}`, {
+            font: '18px Arial',
+            fill: '#ffffff'
+        });
+
+        // 创建经验条图形对象
+        this.experienceBar = this.add.graphics();
+        this.drawExperienceBar();
+
+        // 创建经验球组
+        this.experienceOrbs = this.physics.add.group();
+
+        // 设置角色和经验球的重叠检测
+        this.physics.add.overlap(this.player, this.experienceOrbs, this.collectExperience, null, this);
+
     
     }
+
+    // 绘制经验条方法
+    drawExperienceBar() {
+        const barWidth = this.scale.width;
+        const barHeight = 20;
+        const x = 0;
+        const y = this.scale.height - barHeight - 10;
+    
+        this.experienceBar.clear();
+        this.experienceBar.fillStyle(0x000000);
+        this.experienceBar.fillRect(x, y, barWidth, barHeight);
+    
+        const experiencePercentage = Math.min(this.experience / this.experienceNeeded, 1);
+        this.experienceBar.fillStyle(0x00ff00);
+        this.experienceBar.fillRect(x, y, barWidth * experiencePercentage, barHeight);
+    }
+
     shootBullet() {
         // 获取离玩家最近的怪物
         let closestMonster = null;
@@ -210,7 +260,7 @@ export class Game extends Scene {
         this.healthBar.updatePosition(this.player.getBounds().x, this.player.getBounds().y);
 
         this.geeks.children.iterate((monster) => {
-            this.physics.moveToObject(monster, this.player, 100); // 10为移动速度
+            this.physics.moveToObject(monster, this.player, 20); // 10为移动速度
             monster.healthBar.updatePosition(monster.x, monster.y - 60);
         });
 
@@ -218,8 +268,48 @@ export class Game extends Scene {
         if (Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE))) {
             this.shootBullet();
         }
+
+         // 更新玩家与经验球之间的吸附效果
+        this.experienceOrbs.children.iterate((orb) => {
+            if (orb.active) {
+                const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, orb.x, orb.y);
+                
+                if (distance < 50) {
+                    // 当经验球接近角色时逐渐靠近
+                    this.physics.moveToObject(orb, this.player, 200);
+                }
+
+                // 吸附到角色身上后触发收集逻辑
+                if (distance < 10) {
+                    this.collectExperience(this.player, orb);
+                }
+            }
+        });
+    }
+
+    collectExperience(player, orb) {
+        orb.disableBody(true, true); // 隐藏经验球
+        this.experience += 50; // 每次吸收经验球增加 50 点经验
+    
+        // 检查是否达到升级条件
+        if (this.experience >= this.experienceNeeded) {
+            this.levelUp();
+        }
+    
+        this.drawExperienceBar(); // 更新经验条
+    }
+    
+    // 升级逻辑
+    levelUp() {
+        this.level += 1; // 增加等级
+        this.experience = 0; // 重置当前经验
+        this.experienceNeeded += 50; // 每级增加所需经验，您可以调整增量
+    
+        // 更新等级显示文本
+        this.levelText.setText(`等级: ${this.level}`);
     }
 }
+
 
 
 

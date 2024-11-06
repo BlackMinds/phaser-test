@@ -9,7 +9,6 @@ export class MainMenu extends Scene
 
     create ()
     {
-        this.add.image(512, 384, 'background');
         this.add.image(512, 300, 'logo');
 
         const startText  = this.add.text(512, 460, '点击开始', {

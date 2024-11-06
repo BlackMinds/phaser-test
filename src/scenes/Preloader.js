@@ -9,7 +9,6 @@ export class Preloader extends Scene
 
     init ()
     {
-        this.add.image(512, 384, 'background');
     }
     preload ()
     {
