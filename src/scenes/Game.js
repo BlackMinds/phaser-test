@@ -70,8 +70,11 @@ export class Game extends Scene {
             if (monster.healthBar.currentHealth <= 0) {
                 monster.destroy();
             }
+            monster.setCircle(40); // 设置怪物的碰撞区域大小，适配怪物大小
         });
 
+        // 添加怪物之间的碰撞检测
+        this.physics.add.collider(this.geeks, this.geeks);
         // 添加碰撞检测
         this.physics.add.overlap(this.player, this.geeks, collectStar, null, this);
 
@@ -260,9 +263,10 @@ export class Game extends Scene {
         this.healthBar.updatePosition(this.player.getBounds().x, this.player.getBounds().y);
 
         this.geeks.children.iterate((monster) => {
-            this.physics.moveToObject(monster, this.player, 20); // 10为移动速度
+            this.physics.moveToObject(monster, this.player, 40); // 10为移动速度
             monster.healthBar.updatePosition(monster.x, monster.y - 60);
         });
+
 
          // 按空格键发射子弹
         if (Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE))) {
