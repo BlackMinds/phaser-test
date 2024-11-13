@@ -5,9 +5,9 @@ export class Game extends Scene {
         super('Game');
 
         this.geeks = null; // Group for monsters
-        this.player = null; // Player reference
         this.time = null
         this.healthBar = null;
+        this.player = null; // 玩家属性
     }
 
     preload() {
@@ -41,19 +41,17 @@ export class Game extends Scene {
 
         // 创建玩家角色并设置物理属性
         this.player = this.physics.add.sprite(512, 384, 'character');
-
-
+        this.player.attackPower = 30
+        this.player.maxHealth = 100
+        this.player.speed = 100
         // 设置角色的锚点为中心
         this.player.setOrigin(1, 1); // 根据精灵的实际形状进行调整
 
         // 设置世界的重力
         this.physics.world.gravity.y = 0; // 移除垂直重力，允许玩家在四个方向上自由移动
 
-        // 设置玩家的物理属性
-        // this.player.setBounce(0.2);
-        // this.player.setCollideWorldBounds(true);
 
-        this.healthBar = new HealthBar(this, this.player.getBounds().x, this.player.getBounds().y, 50, 5);
+        this.healthBar = new HealthBar(this, this.player.getBounds().x, this.player.getBounds().y, 50, 5,this.player.maxHealth);
 
 
         // Initialize monsters
@@ -132,7 +130,7 @@ export class Game extends Scene {
         this.physics.add.collider(this.bullets, this.geeks, (bullet, monster) => {
             if (bullet.active && monster.active) {
                 bullet.disableBody(true, true);
-                monster.healthBar.decrease(100);
+                monster.healthBar.decrease(this.player.attackPower); // 假设子弹命中怪物时减少20点血量
         
                 if (monster.healthBar.currentHealth <= 0) {
                     // 生成经验球
@@ -170,6 +168,13 @@ export class Game extends Scene {
         // 设置角色和经验球的重叠检测
         this.physics.add.overlap(this.player, this.experienceOrbs, this.collectExperience, null, this);
 
+        let bulletTime = 900
+        this.time.addEvent({
+            delay: bulletTime, // 1000 毫秒 = 1 秒
+            callback: this.shootBullet,
+            callbackScope: this,
+            loop: true
+        });
     
     }
 
@@ -204,25 +209,25 @@ export class Game extends Scene {
     
         if (closestMonster) {
             const bullet = this.bullets.get();
-            
+    
             if (bullet) {
                 // 初始化子弹的状态
                 bullet.enableBody(true, this.player.x, this.player.y, true, true);
                 bullet.setActive(true);
                 bullet.setVisible(true);
-                bullet.setPosition(this.player.x, this.player.y);
-                
-                   // 缩小子弹大小
-                bullet.setScale(0.5); // 根据需要调整缩小比例
-                
-
-                // 计算子弹的旋转角度
-                const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, closestMonster.x, closestMonster.y);
-                bullet.setRotation(angle); // 旋转子弹头朝向目标
-                // 确保子弹的速度和方向
-                this.physics.moveToObject(bullet, closestMonster, 200); // 子弹速度为300
+                bullet.setScale(0.5);
     
-                // 子弹的边界检测
+                // 计算子弹到怪物的角度
+                const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, closestMonster.x, closestMonster.y);
+                bullet.setRotation(angle); // 子弹方向朝向目标
+                
+                // 使用速度向量代替 moveToObject
+                const bulletSpeed = 200;
+                const velocityX = Math.cos(angle) * bulletSpeed;
+                const velocityY = Math.sin(angle) * bulletSpeed;
+                bullet.setVelocity(velocityX, velocityY);
+    
+                // 边界检测
                 bullet.body.setCollideWorldBounds(true);
                 bullet.body.onWorldBounds = true;
                 bullet.body.world.on('worldbounds', (body) => {
@@ -240,18 +245,18 @@ export class Game extends Scene {
 
         // 检测键盘输入并控制玩家移动
         if (this.cursors.left.isDown) {
-            this.player.setVelocityX(-160);
+            this.player.setVelocityX(-this.player.speed);
             this.player.anims.play('left', true);
         } else if (this.cursors.right.isDown) {
-            this.player.setVelocityX(160);
+            this.player.setVelocityX(this.player.speed);
             this.player.anims.play('right', true);
         }
 
         if (this.cursors.up.isDown) {
-            this.player.setVelocityY(-160);
+            this.player.setVelocityY(-this.player.speed);
             this.player.anims.play('up', true);
         } else if (this.cursors.down.isDown) {
-            this.player.setVelocityY(160);
+            this.player.setVelocityY(this.player.speed);
             this.player.anims.play('down', true);
         }
 
@@ -267,11 +272,6 @@ export class Game extends Scene {
             monster.healthBar.updatePosition(monster.x, monster.y - 60);
         });
 
-
-         // 按空格键发射子弹
-        if (Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE))) {
-            this.shootBullet();
-        }
 
          // 更新玩家与经验球之间的吸附效果
         this.experienceOrbs.children.iterate((orb) => {
@@ -311,21 +311,25 @@ export class Game extends Scene {
     
         // 更新等级显示文本
         this.levelText.setText(`等级: ${this.level}`);
+          // 暂停当前场景并启动 UpgradeScene
+        this.scene.pause();               // 暂停当前游戏
+        this.scene.launch('UpgradeScene'); // 启动升级场景
     }
 }
 
 
 
 
-// 血条
+// 角色血条
 class HealthBar {
-    constructor(scene, x, y, width, height) {
+    constructor(scene, x, y, width, height,maxHealth) {
+        console.error(this.scene)
         this.scene = scene;
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
-        this.maxHealth = 100;
+        this.maxHealth = maxHealth;
         this.currentHealth = this.maxHealth;
 
         // Create a graphics object to display the health bar
